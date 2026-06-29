@@ -2,10 +2,9 @@ package service
 
 import (
 	"context"
+	"time"
 
 	healthv1 "github.com/Jingk97/topus-server/api/topus/health/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Version 是 server 版本号（构建期可注入 ldflags，先硬编码占位）。
@@ -23,10 +22,14 @@ type HealthService struct {
 // NewHealthService 构造 HealthService。
 func NewHealthService() *HealthService { return &HealthService{} }
 
-// Ping 链路预检。
+// Ping 链路预检：连通即返回 ok + 版本 + 服务端时间。
 //
-// C1 存档点：此版**故意未实现**（返回 Unimplemented），用于让失败测试因
-// "逻辑未实现"而红（而非编译/链路错）。C2 再实现到返回 ok。
+// 不需 secret/证书——它只验"链路可达 + server 存活"，供 agent 批量纳管前预检。
+// 返回 server_version / server_time 便于排查版本不一致与时钟漂移。
 func (s *HealthService) Ping(ctx context.Context, _ *healthv1.PingRequest) (*healthv1.PingReply, error) {
-	return nil, status.Error(codes.Unimplemented, "Ping 尚未实现（C1 失败测试存档点）")
+	return &healthv1.PingReply{
+		Ok:             true,
+		ServerVersion:  Version,
+		ServerTimeUnix: time.Now().Unix(),
+	}, nil
 }
