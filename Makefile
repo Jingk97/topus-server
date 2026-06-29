@@ -1,4 +1,4 @@
-.PHONY: gen tidy build test smoke clean
+.PHONY: gen tidy build test smoke certs clean
 
 # proto 生成：buf → go(消息) + go-grpc(服务桩)，输出回 api/ 源码同目录
 gen:
@@ -17,7 +17,11 @@ build:
 test:
 	go test ./...
 
-# 端到端冒烟：起真 server 进程 → agent test 子命令真连 → 验证 ok
+# 生成开发用自签证书到 certs/（ca.pem / server.pem / server-key.pem）
+certs:
+	go run ./cmd/gen-certs -dir=certs -hosts=127.0.0.1,localhost
+
+# 端到端冒烟：起真 server(单向 TLS) → agent test --ca 真连 → 验证 ok
 smoke: build
 	@./scripts/smoke.sh
 
