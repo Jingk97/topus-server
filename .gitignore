@@ -6,6 +6,9 @@
 bin/
 dist/
 
+# 开发用自签证书（勿提交，用 make certs 现生成）
+certs/
+
 # 本地配置
 *.local.yaml
 *.local.yml
