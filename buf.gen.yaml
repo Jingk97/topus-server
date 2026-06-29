@@ -1,0 +1,10 @@
+version: v2
+plugins:
+  # 生成消息结构体（.pb.go）
+  - local: protoc-gen-go
+    out: api
+    opt: paths=source_relative
+  # 生成 gRPC 服务桩（_grpc.pb.go）
+  - local: protoc-gen-go-grpc
+    out: api
+    opt: paths=source_relative

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+// 链路预检（health）服务：行走骨架第一刀。
+// 用途：agent 批量纳管前，先在样本机跑一次 Ping 验证到 server 的 gRPC 链路可达
+// （方案《纳管批次与接入安全》§3.8 测试命令）。本接口不需 secret、不需证书。
+package topus.health.v1;
+
+option go_package = "github.com/Jingk97/topus-server/api/topus/health/v1;healthv1";
+
+service Health {
+  // Ping 链路预检：连通即返回 ok + server 版本 + 服务端时间。
+  rpc Ping(PingRequest) returns (PingReply);
+}
+
+message PingRequest {}
+
+message PingReply {
+  bool ok = 1;                 // 链路通且 server 正常 = true
+  string server_version = 2;   // server 版本（便于排查版本不一致）
+  int64 server_time_unix = 3;  // 服务端 Unix 时间（便于排查时钟漂移）
+}
