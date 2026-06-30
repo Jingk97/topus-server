@@ -1,17 +1,19 @@
 # topus-server
 
-Topus（全自动动态 CMDB）的 server 端。当前处于 **S1 行走骨架·第一刀**：
-打通 agent ↔ server 的 gRPC 链路（health.Ping 链路预检），明文先通，单向 TLS / Kratos 接线为紧接增量。
+Topus（全自动动态 CMDB）的 server 端（含 agent）。当前 **S1 行走骨架**已落：
+① health 链路预检（明文 + 单向 TLS）；② agent 本地采集闭环（监管 osqueryd 采 host/进程）。
 
 ## 目录约定
 
 ```
 api/topus/<模块>/v<n>/   # proto 契约 + buf 生成的 *.pb.go（proto 优先，buf 管理）
 cmd/server/              # server 可执行入口（一应用一二进制）
-cmd/agent/               # agent 可执行入口（test 链路预检子命令）
+cmd/agent/               # agent 入口（test 链路预检 / collect 本地采集 子命令）
 internal/service/        # 服务实现（不依赖框架，handler 为适配器）
+internal/agent/          # agent 端：osq(监管 osqueryd) / collect(采集组装)
 internal/biz/<上下文>/   # 各限界上下文领域内核（后续切片填充）
 internal/data/           # repo 适配器（PostgreSQL / NATS，后续）
+deploy/osquery/          # osqueryd 拉取(fetch.sh)；bin/ gitignore 不提交
 bin/                     # 构建产物（gitignore，不提交）
 scripts/                 # 冒烟等脚本
 ```
@@ -37,6 +39,10 @@ scripts/                 # 冒烟等脚本
 | `make gen` | 由 proto 生成 Go 代码 | `api/.../health.pb.go`、`*_grpc.pb.go` 生成 |
 | `make test` | 单元/契约：bufconn 内存管道调 Ping | `go test` 全绿（`TestHealthPing` PASS） |
 | `make smoke` | **端到端**：起真 server 进程 → `topus-agent test` 真连 | 打印 `SMOKE PASS: ok server=... time=...`，退出码 0 |
+| `make collect` | agent 本地采集 host+进程（监管 osqueryd） | 日志显示采集概览 + 输出快照 JSON，进程数与 `ps` 接近 |
+
+> 采集的**手动测试方法**与 **osquery shell 探索**（怎么看采到什么、怎么探可扩字段），见
+> [采集与 osquery 调试指南](docs/采集与osquery调试.md)。
 
 手动复现端到端（等价于 `make smoke`）：
 
