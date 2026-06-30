@@ -10,23 +10,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/osquery/osquery-go"
 )
 
-// DefaultBinPath 返回项目内 osqueryd 默认路径（按 GOOS-GOARCH，由 deploy/osquery/fetch.sh 拉取）。
-//
-// macOS 上 osqueryd 必须在完整 .app bundle 内运行（依赖签名+资源，单抠二进制跑不了），
-// 故 mac 指向 bundle 内的 osqueryd；Linux 是普通静态二进制，直接在目录下。
-func DefaultBinPath() string {
-	base := filepath.Join("deploy", "osquery", "bin", runtime.GOOS+"-"+runtime.GOARCH)
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(base, "osquery.app", "Contents", "MacOS", "osqueryd")
-	}
-	return filepath.Join(base, "osqueryd")
-}
+// osqueryd 路径定位见 resolve.go 的 ResolvePath（覆盖开发/统一包/embed/显式四种来源）。
 
 // Daemon 管理一个被拉起的 osqueryd 子进程及其 extension socket。
 type Daemon struct {
