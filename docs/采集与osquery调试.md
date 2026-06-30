@@ -64,13 +64,19 @@ SELECT * FROM interface_addresses;     -- 网卡 IP
 
 ## 3. 当前采集的表与字段
 
-S1 最小集（写死 SQL，见 `internal/agent/collect/collect.go`）：
+host 画像（丰富档，写死 SQL，见 `internal/agent/collect/collect.go`）：
 
-| 表 | 采的字段 | 组装到 |
-|----|---------|--------|
-| `system_info` | hostname, uuid, cpu_logical_cores, physical_memory | host（uuid = product_uuid） |
-| `os_version` | name, version | host |
-| `processes` | pid, path, cmdline, start_time | processes |
+| osquery 表 | 采的字段 | 组装到 |
+|-----------|---------|--------|
+| `system_info` | hostname, uuid(=product_uuid), cpu_brand, cpu_logical/physical_cores, physical_memory, hardware_vendor/model/serial | host 基础+CPU+硬件盘点 |
+| `os_version` | name, version | host.os |
+| `interface_addresses` JOIN `interface_details` | 承载 IP 的网卡 name/ip/mac（过滤环回/链路本地/全0 mac） | host.interfaces |
+| `block_devices` | 物理盘 name/model/size（正则过滤分区/合成盘） | host.disks |
+| `uptime` | total_seconds | host.uptime_seconds |
+| `logged_in_users` | user（type=user 去重） | host.logged_in_users |
+| `processes` | pid, path, cmdline, start_time（最小集） | processes |
+
+> 遗留：磁盘 `size_raw` 单位跨平台未归一；mac 上有 APFS 合成盘混入（Linux 干净）。
 
 ## 4. 可扩采集的表（参考）
 
