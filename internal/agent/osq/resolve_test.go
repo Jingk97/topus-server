@@ -1,65 +1,74 @@
 package osq
 
 import (
-	"os"
-	"path/filepath"
+	"fmt"
 	"reflect"
 	"testing"
 )
 
-// TestCandidatePaths_Priority 验证无显式指定时的优先级顺序：env → 同目录 → 开发期路径。
-func TestCandidatePaths_Priority(t *testing.T) {
-	got := candidatePaths("", "/y/env-osqueryd", "/exe", "/cwd", "linux", "amd64")
-	want := []string{
-		"/y/env-osqueryd",   // 2 环境变量
-		"/exe/topus-agentd", // 3 同目录·产品化命名
-		"/exe/osqueryd",     // 3 同目录·原名
-		"/cwd/deploy/osquery/bin/linux-amd64/osqueryd", // 4 开发期路径
+func TestSiblingCandidates(t *testing.T) {
+	if got := siblingCandidates("/d", "linux"); !reflect.DeepEqual(got, []string{"/d/topus-agentd", "/d/osqueryd"}) {
+		t.Fatalf("linux sibling: %v", got)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("优先级顺序不符\n got=%v\nwant=%v", got, want)
+	want := []string{"/d/topus-agentd", "/d/osquery.app/Contents/MacOS/osqueryd", "/d/osqueryd"}
+	if got := siblingCandidates("/d", "darwin"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("darwin sibling: %v", got)
 	}
 }
 
-// TestCandidatePaths_ExplicitWins 显式指定时只认它，不追加其它候选。
-func TestCandidatePaths_ExplicitWins(t *testing.T) {
-	got := candidatePaths("/x/explicit", "/y/env", "/exe", "/cwd", "linux", "amd64")
-	if len(got) != 1 || got[0] != "/x/explicit" {
-		t.Fatalf("显式指定应独占，got=%v", got)
+func TestDevCandidates(t *testing.T) {
+	if got := devCandidates("/c", "linux", "amd64"); !reflect.DeepEqual(got, []string{"/c/deploy/osquery/bin/linux-amd64/osqueryd"}) {
+		t.Fatalf("linux dev: %v", got)
+	}
+	want := []string{"/c/deploy/osquery/bin/darwin-arm64/osquery.app/Contents/MacOS/osqueryd"}
+	if got := devCandidates("/c", "darwin", "arm64"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("darwin dev: %v", got)
 	}
 }
 
-// TestCandidatePaths_Darwin mac 同目录候选含 .app bundle，开发期路径也走 bundle。
-func TestCandidatePaths_Darwin(t *testing.T) {
-	got := candidatePaths("", "", "/exe", "/cwd", "darwin", "arm64")
-	want := []string{
-		"/exe/topus-agentd",
-		"/exe/osquery.app/Contents/MacOS/osqueryd",
-		"/exe/osqueryd",
-		"/cwd/deploy/osquery/bin/darwin-arm64/osquery.app/Contents/MacOS/osqueryd",
+// existsSet 构造一个"哪些路径算存在"的判断函数。
+func existsSet(paths ...string) func(string) bool {
+	m := map[string]bool{}
+	for _, p := range paths {
+		m[p] = true
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("mac 候选不符\n got=%v\nwant=%v", got, want)
-	}
+	return func(p string) bool { return m[p] }
 }
 
-// TestResolvePath_EnvHit 环境变量指向的真实文件应被命中。
-func TestResolvePath_EnvHit(t *testing.T) {
-	dir := t.TempDir()
-	fake := filepath.Join(dir, "osqueryd")
-	if err := os.WriteFile(fake, []byte("#!/bin/true\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TOPUS_OSQUERYD", fake)
-	got, err := ResolvePath("")
-	if err != nil || got != fake {
-		t.Fatalf("期望命中 env 文件 %s，got=%q err=%v", fake, got, err)
-	}
-}
+// TestResolveWith_Priority 验证六级查找优先级（含 embed）。
+func TestResolveWith_Priority(t *testing.T) {
+	noExtract := func() (string, bool, error) { return "", false, nil }
+	yesExtract := func() (string, bool, error) { return "/embed/topus-agentd", true, nil }
+	noLook := func(string) (string, error) { return "", fmt.Errorf("not in PATH") }
+	yesLook := func(string) (string, error) { return "/usr/bin/osqueryd", nil }
 
-// TestResolvePath_ExplicitMissing 显式指定但文件不存在 → 报错（不静默回退）。
-func TestResolvePath_ExplicitMissing(t *testing.T) {
-	if _, err := ResolvePath("/definitely/not/here/osqueryd"); err == nil {
-		t.Fatal("显式指定不存在的路径应报错")
+	// 1 显式指定命中
+	if p, err := resolveWith("/x", "", "/e", "/c", "linux", "amd64", noExtract, existsSet("/x"), noLook); err != nil || p != "/x" {
+		t.Fatalf("explicit: %q %v", p, err)
+	}
+	// 1' 显式指定但不存在 → 报错
+	if _, err := resolveWith("/x", "", "/e", "/c", "linux", "amd64", noExtract, existsSet(), noLook); err == nil {
+		t.Fatal("explicit 缺失应报错")
+	}
+	// 2 环境变量
+	if p, _ := resolveWith("", "/env", "/e", "/c", "linux", "amd64", noExtract, existsSet("/env"), noLook); p != "/env" {
+		t.Fatalf("env: %q", p)
+	}
+	// 3 同目录优先于 embed（sibling 存在时即便有 embed 也用 sibling）
+	if p, _ := resolveWith("", "", "/e", "/c", "linux", "amd64", yesExtract, existsSet("/e/osqueryd"), noLook); p != "/e/osqueryd" {
+		t.Fatalf("sibling 应优先于 embed: %q", p)
+	}
+	// 4 embed 命中（无 sibling）
+	if p, _ := resolveWith("", "", "/e", "/c", "linux", "amd64", yesExtract, existsSet(), noLook); p != "/embed/topus-agentd" {
+		t.Fatalf("embed: %q", p)
+	}
+	// 5 开发期路径（无 embed）
+	dev := "/c/deploy/osquery/bin/linux-amd64/osqueryd"
+	if p, _ := resolveWith("", "", "/e", "/c", "linux", "amd64", noExtract, existsSet(dev), noLook); p != dev {
+		t.Fatalf("dev: %q", p)
+	}
+	// 6 PATH 兜底
+	if p, _ := resolveWith("", "", "/e", "/c", "linux", "amd64", noExtract, existsSet(), yesLook); p != "/usr/bin/osqueryd" {
+		t.Fatalf("PATH: %q", p)
 	}
 }

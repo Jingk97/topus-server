@@ -1,0 +1,2 @@
+# 占位：保持 assets/ 目录存在（//go:embed assets/osqueryd.gz 需要路径在）。
+# osqueryd.gz 由 deploy/build-agent-embed.sh 构建时 fetch+gzip 生成，不入 git。

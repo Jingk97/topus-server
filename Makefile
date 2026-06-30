@@ -1,4 +1,4 @@
-.PHONY: gen tidy build test smoke certs osquery collect clean
+.PHONY: gen tidy build test smoke certs osquery collect agent-embed clean
 
 # proto 生成：buf → go(消息) + go-grpc(服务桩)，输出回 api/ 源码同目录
 gen:
@@ -32,6 +32,10 @@ osquery:
 # 本地采集演示：起 osqueryd 采 host+进程，结构化日志 + 输出快照 JSON
 collect: build osquery
 	./bin/topus-agent collect
+
+# 构建内嵌 osqueryd 的单文件 linux agent（产品化形态）：make agent-embed [ARCH=amd64|arm64]
+agent-embed:
+	bash deploy/build-agent-embed.sh $(ARCH)
 
 clean:
 	@rm -rf bin
