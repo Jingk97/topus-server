@@ -113,10 +113,15 @@ scp bin/topus-agent-linux-amd64 user@<linux-host>:~/
 # 拉 linux osqueryd（联网一次；arm64 机器把 x86_64 换成 aarch64）
 curl -sSL -o osq.tgz https://github.com/osquery/osquery/releases/download/5.23.0/osquery-5.23.0_1.linux_x86_64.tar.gz
 tar xzf osq.tgz usr/bin/osqueryd
+mv usr/bin/osqueryd ./osqueryd          # 放 agent 同目录 → agent 自动找（免 --osqueryd）
 
-chmod +x topus-agent-linux-amd64
-sudo ./topus-agent-linux-amd64 collect --osqueryd=usr/bin/osqueryd   # sudo 拿全进程 cmdline
+chmod +x topus-agent-linux-amd64 osqueryd
+sudo ./topus-agent-linux-amd64 collect  # 自动找同目录 osqueryd；sudo 拿全进程 cmdline
 ```
+
+> **agent 怎么找 osqueryd**（一处定义，见 `internal/agent/osq/resolve.go`）：按优先级
+> ① `--osqueryd` 显式 → ② `TOPUS_OSQUERYD` 环境变量 → ③ **agent 同目录**（`topus-agentd`/`osqueryd`/mac bundle）→ ④ 开发期项目路径 `deploy/osquery/bin/<os-arch>` → ⑤ 系统 `PATH`。
+> 所以"osqueryd 放 agent 旁边"就自动命中——这也是产品化**统一包/embed**（osqueryd 落盘为 `topus-agentd`）的查找路径。
 
 **Linux 预期（验证点）**：
 - **磁盘**：干净物理盘（`/dev/sda`、`/dev/nvme0n1`），无 mac 那种 APFS 合成盘噪音。
