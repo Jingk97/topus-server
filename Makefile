@@ -1,4 +1,4 @@
-.PHONY: gen tidy build test smoke certs clean
+.PHONY: gen tidy build test smoke certs osquery collect clean
 
 # proto 生成：buf → go(消息) + go-grpc(服务桩)，输出回 api/ 源码同目录
 gen:
@@ -24,6 +24,14 @@ certs:
 # 端到端冒烟：起真 server(单向 TLS) → agent test --ca 真连 → 验证 ok
 smoke: build
 	@./scripts/smoke.sh
+
+# 拉取项目内 osqueryd（不装宿主机；mac 为完整 .app bundle，见 deploy/osquery/fetch.sh）
+osquery:
+	bash deploy/osquery/fetch.sh
+
+# 本地采集演示：起 osqueryd 采 host+进程，结构化日志 + 输出快照 JSON
+collect: build osquery
+	./bin/topus-agent collect
 
 clean:
 	@rm -rf bin

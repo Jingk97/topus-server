@@ -9,6 +9,9 @@ dist/
 # 开发用自签证书（勿提交，用 make certs 现生成）
 certs/
 
+# osqueryd 二进制（~110MB/平台，勿提交，用 deploy/osquery/fetch.sh 现拉）
+deploy/osquery/bin/
+
 # 本地配置
 *.local.yaml
 *.local.yml
