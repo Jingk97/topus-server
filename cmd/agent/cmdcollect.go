@@ -32,7 +32,7 @@ func runCollect(args []string) {
 		os.Exit(1)
 	}
 	log.Info("拉起 osqueryd", "path", osqdPath)
-	d, err := osq.Start(ctx, osqdPath)
+	d, err := osq.Start(ctx, osqdPath, log)
 	if err != nil {
 		log.Error("osqueryd 启动失败", "err", err)
 		os.Exit(1)

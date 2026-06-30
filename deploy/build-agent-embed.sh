@@ -19,6 +19,9 @@ GZ="internal/agent/osq/assets/osqueryd.gz"
 OUT="bin/topus-agent-linux-${ARCH}-embed"
 
 # 1 fetch linux osqueryd -> gzip 进 assets (不入 git)。
+# TODO(产品化): ① 下载后 sha256 校验(防供应链篡改, 在 deploy/osquery 维护各 asset 校验和);
+#               ② strip 调试符号(osqueryd 297MB 含 debug_info, strip 后体积大降);
+#               ③ go build 加 -ldflags="-s -w" -trimpath。
 echo "fetch + gzip linux/${ARCH} osqueryd ${VERSION} ..."
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
