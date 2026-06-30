@@ -16,7 +16,7 @@ import (
 // 用结构化日志记录"采到了什么"，并把完整快照以 JSON 输出（不依赖 server）。
 func runCollect(args []string) {
 	fs := flag.NewFlagSet("collect", flag.ExitOnError)
-	osqd := fs.String("osqueryd", osq.DefaultBinPath(), "osqueryd 二进制路径")
+	osqd := fs.String("osqueryd", "", "osqueryd 路径（空=自动查找：同目录/项目/PATH，见 osq.ResolvePath）")
 	asJSON := fs.Bool("json", true, "输出快照 JSON 到 stdout")
 	_ = fs.Parse(args)
 
@@ -25,9 +25,14 @@ func runCollect(args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// 1 拉起 osqueryd 并等就绪。
-	log.Info("拉起 osqueryd", "path", *osqd)
-	d, err := osq.Start(ctx, *osqd)
+	// 1 定位 osqueryd（自动查找；--osqueryd 可显式覆盖）。
+	osqdPath, err := osq.ResolvePath(*osqd)
+	if err != nil {
+		log.Error("定位 osqueryd 失败", "err", err)
+		os.Exit(1)
+	}
+	log.Info("拉起 osqueryd", "path", osqdPath)
+	d, err := osq.Start(ctx, osqdPath)
 	if err != nil {
 		log.Error("osqueryd 启动失败", "err", err)
 		os.Exit(1)
