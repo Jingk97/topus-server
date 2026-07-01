@@ -24,11 +24,11 @@ case "$OS-$ARCH" in
     OUT="darwin-arm64" ;;
   Linux-x86_64)
     ASSET="osquery-${VERSION}_1.linux_x86_64.tar.gz"
-    SRC="usr/bin/osqueryd"
+    SRC="opt/osquery/bin/osqueryd"   # usr/bin/osqueryd 是软链, 取真实二进制
     OUT="linux-amd64" ;;
   Linux-aarch64)
     ASSET="osquery-${VERSION}_1.linux_aarch64.tar.gz"
-    SRC="usr/bin/osqueryd"
+    SRC="opt/osquery/bin/osqueryd"   # usr/bin/osqueryd 是软链, 取真实二进制
     OUT="linux-arm64" ;;
   *)
     echo "unsupported platform: $OS-$ARCH" >&2

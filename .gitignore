@@ -12,6 +12,9 @@ certs/
 # osqueryd 二进制（~110MB/平台，勿提交，用 deploy/osquery/fetch.sh 现拉）
 deploy/osquery/bin/
 
+# embed 用 osqueryd（构建 -tags embedosq 时 fetch+gzip 生成，勿提交）
+internal/agent/osq/assets/*.gz
+
 # 本地配置
 *.local.yaml
 *.local.yml

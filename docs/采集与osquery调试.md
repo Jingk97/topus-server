@@ -130,5 +130,45 @@ sudo ./topus-agent-linux-amd64 collect  # 自动找同目录 osqueryd；sudo 拿
 
 > osqueryd 是 Linux 普通静态二进制（不像 mac 要完整 .app bundle），单文件即可跑。
 
+## 6. 产品化形态：单文件 embed（osqueryd 内嵌进 agent）
+
+§5 是**开发期**形态：agent 与 osqueryd 两个文件、osqueryd 靠 fetch 脚本单独拉。
+**产品化/部署**形态是**一个二进制搞定**：osqueryd 用 `//go:embed` 打进 agent，运行时解压
+落盘为 `topus-agentd` 再拉起。用户只需下载、跑一个文件，无需联网拉 osqueryd。
+
+**① 构建单文件 embed 版**（mac 上交叉编译，产物 ~102MB = agent 18MB + 内嵌 osqueryd 84MB）：
+
+```bash
+deploy/build-agent-embed.sh amd64        # arm64 机器：deploy/build-agent-embed.sh arm64
+# 产物：bin/topus-agent-linux-amd64-embed（-tags embedosq）
+```
+
+**② scp 到 Linux 真机、核对 md5、直接跑**（不需要再单独放 osqueryd）：
+
+```bash
+scp bin/topus-agent-linux-amd64-embed user@<linux-host>:~/
+md5sum topus-agent-linux-amd64-embed     # 与本机 `md5 bin/...` 比对，确认传的是新版
+chmod +x topus-agent-linux-amd64-embed
+sudo ./topus-agent-linux-amd64-embed collect
+```
+
+**预期**：`拉起 osqueryd` → `osqueryd 就绪，extension socket 已连通` → `采集完成`（host/
+cpu/interfaces/disks/process_count 概览）→ 完整 JSON 快照。
+
+**运行时机制**（见 `internal/agent/osq/embed_osqueryd.go` + `daemon.go`）：
+- 首次运行把内嵌的 osqueryd 解压到 `~/.cache/topus/topus-agentd`（sudo 下即 `/root/.cache/topus/`），
+  按 sha256 判重复用；空盘/损坏/无权限都**硬报错不静默**（无 `/tmp` 兜底）。
+- 拉起时 socket 放 `/tmp/tpx-osq-*/osq.em`（mac 104 字节路径上限），配 `--ephemeral` 内存态。
+
+**两个真机踩坑（已修，留档避免复犯）**：
+
+| 现象 | 根因 | 修法 |
+|------|------|------|
+| `Error reading config: config file does not exist: /dev/null` 后 socket 超时 | osqueryd 读配置走"安全读文件"，只收普通文件；`/dev/null` 是字符设备被拒 → 报错退出 | 写真实空 JSON 配置 `{}`，`--config_path` 指它 |
+| 日志出现 `Using a virtual database. Need help, type '.help'`（osqueryi shell 横幅）后 socket 超时 | osquery 按 `argv[0]` basename 判模式：非 `osqueryd` → 进交互 shell；agent 无 tty→EOF 退出→socket 消失 | 拉起时强制 `argv[0]="osqueryd"` 锁 daemon 模式 |
+
+> 排错口诀：**socket 就绪超时 ≠ osqueryd 没打进来**——能走到"等 socket"说明 osqueryd 已解压+exec，
+> 问题在它起来后为何不建/不留 socket。手动 `sudo <落盘的 topus-agentd> ... --verbose` 看它自己的日志最快。
+
 ---
 ← 返回 [README](../README.md) · 技术内幕见 docs 仓《系统技术手册》§4.6
