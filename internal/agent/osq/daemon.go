@@ -50,7 +50,17 @@ func Start(ctx context.Context, osquerydPath string, log *slog.Logger) (*Daemon,
 	}
 	sock := filepath.Join(tmpDir, "osq.em")
 
-	// 1 拉起 osqueryd：ephemeral 内存态 + 无远程配置。
+	// 写一个空 JSON 配置文件（{}）供 osqueryd 读取。
+	// 关键：不能用 --config_path=/dev/null——osqueryd 读配置走"安全读文件"，只收普通文件，
+	//   /dev/null 是字符设备会被判成"config file does not exist"而报错退出（Linux 上更严）。
+	//   写一个真实空配置，既能被正常读取、又不加载任何外部配置。
+	confPath := filepath.Join(tmpDir, "osq.conf")
+	if err := os.WriteFile(confPath, []byte("{}"), 0o600); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return nil, fmt.Errorf("写 osqueryd 空配置：%w", err)
+	}
+
+	// 1 拉起 osqueryd：ephemeral 内存态 + 空本地配置（不拉远程）。
 	// TODO(产品化): --disable_watchdog 与 stderr 直透是开发期取值；产品形态应默认开 watchdog
 	//   （防 osqueryd 内存/CPU 失控）+ 日志走文件/丢弃。做成 build-tag/配置开关（下一任务设计）。
 	cmd := exec.CommandContext(ctx, osquerydPath,
@@ -58,8 +68,15 @@ func Start(ctx context.Context, osquerydPath string, log *slog.Logger) (*Daemon,
 		"--ephemeral",
 		"--disable_logging=true",
 		"--disable_watchdog=true",
-		"--config_path=/dev/null",
+		"--config_path="+confPath,
 	)
+	// 关键：osquery 是"一个二进制两种人格"，靠 argv[0] 的 basename 判定模式——
+	//   basename == "osqueryd" → daemon（守护进程，我们要的：常驻、只服务 extension socket）；
+	//   其它任何名字（含我们落盘的 topus-agentd）→ osqueryi 交互 shell（读 stdin 的 REPL）。
+	// agent 拉起时无 tty，若进了 shell 模式会立刻 EOF 退出、socket 随之消失 → agent 轮询超时。
+	// 故这里必须把 argv[0] 强制成 "osqueryd" 锁定 daemon 模式（文件名仍是 topus-agentd，仅 argv[0] 变）。
+	// 代价：ps 里进程名显示 osqueryd 而非 topus-agentd；进程名品牌化需 patch osquery，留待产品化。
+	cmd.Args[0] = "osqueryd"
 	cmd.Stderr = os.Stderr // 开发期透出 osqueryd 日志便于排查（产品化改，见上 TODO）
 	if err := cmd.Start(); err != nil {
 		_ = os.RemoveAll(tmpDir)
