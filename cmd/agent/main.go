@@ -1,6 +1,7 @@
 // Command topus-agent 是 agent 端可执行入口。子命令：
-//   test    链路预检：连 server 调 health.Ping（可选单向 TLS）
-//   collect 本地采集：拉起 osqueryd 采 host + 进程，输出快照（不依赖 server）
+//
+//	test    链路预检：连 server 调 health.Ping（可选单向 TLS）
+//	collect 本地采集：拉起 osqueryd 采 host + 进程，输出快照（不依赖 server）
 package main
 
 import (
