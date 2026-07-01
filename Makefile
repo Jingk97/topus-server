@@ -1,4 +1,4 @@
-.PHONY: gen tidy build test smoke certs osquery collect agent-embed clean
+.PHONY: gen tidy build test embed-check smoke certs osquery collect agent-embed clean
 
 # proto 生成：buf → go(消息) + go-grpc(服务桩)，输出回 api/ 源码同目录
 gen:
@@ -13,9 +13,23 @@ build:
 	go build -o bin/topus-server ./cmd/server
 	go build -o bin/topus-agent  ./cmd/agent
 
-# 单元/契约测试：bufconn 内存管道，不起真实进程
-test:
+# 单元/契约测试：bufconn 内存管道，不起真实进程。先过 embed 编译门。
+test: embed-check
 	go test ./...
+
+# embed 编译门：assets/osqueryd.gz 不入 git（靠 build 脚本 fetch 生成），默认构建编译不到
+# embed_osqueryd.go 的解压/权限/TOCTOU 代码。用一字节占位 gz 让 `-tags embedosq` 能编译，
+# 守住 embed 分支的编译信号（笔误/签名漂移会被抓到）；已有真实 gz 时直接编译不动它。
+embed-check:
+	@GZ=internal/agent/osq/assets/osqueryd.gz; \
+	if [ -f $$GZ ]; then \
+	  go build -tags embedosq -o /dev/null ./cmd/agent && echo "embed build OK (existing asset)"; \
+	else \
+	  printf '' | gzip > $$GZ; \
+	  go build -tags embedosq -o /dev/null ./cmd/agent; ret=$$?; \
+	  rm -f $$GZ; \
+	  if [ $$ret -eq 0 ]; then echo "embed build OK (placeholder)"; else exit $$ret; fi; \
+	fi
 
 # 生成开发用自签证书到 certs/（ca.pem / server.pem / server-key.pem）
 certs:
