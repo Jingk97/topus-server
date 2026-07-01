@@ -30,6 +30,11 @@ type Daemon struct {
 // 关键点：① ephemeral = 内存态，不写持久 RocksDB/pidfile，避免单机多实例锁冲突；
 // ② socket 文件出现 ≠ 可连，必须轮询试连（osquery 官方实证，~200ms 延迟）。
 func Start(ctx context.Context, osquerydPath string, log *slog.Logger) (*Daemon, error) {
+	// 统一转绝对路径：exec 对不含 "/" 的名字会去 $PATH 查找（并非用当前目录），
+	// 绝对路径可避免"误查 PATH / 报 not found in $PATH"，让缺失时给出确定的路径错误。
+	if abs, err := filepath.Abs(osquerydPath); err == nil {
+		osquerydPath = abs
+	}
 	if _, err := os.Stat(osquerydPath); err != nil {
 		return nil, fmt.Errorf("osqueryd 不可用（%s）：%w", osquerydPath, err)
 	}
